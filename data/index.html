@@ -1,0 +1,45 @@
+<head><style>
+body { background: green; }
+li { color: white; font-family: Verdana, Geneva, sans-serif; }
+#button { font-size: 150pt;
+</style></head>
+<body>
+<button id=button onClick='fetch("/tree", {method: "POST"}).then(setState);'>&#57395;</button>
+<ol id=state_list>
+        <li>Fade white/color</li>
+        <li>Fade white</li>
+        <li>Blink white/color</li>
+        <li>White</li>
+        <li>Slow Fade in/out white, then color</li>
+        <li>Color</li>
+        <li>Fade Color</li>
+        <li>Fade in/out white and color</li>
+        <li>Off</li>
+</ol>
+<button onClick='fetch("/tree", {method: "PUT"}).then(setState);'>set</button>
+<script language=javascript>
+var state = 0;
+var target = 0;
+let lis = document.getElementById('state_list').getElementsByTagName('li');
+async function setState(response) {
+        let s = await response.text();
+        state = s;
+        for (var i = 0; i < lis.length; i++) {
+                var color = (i.toString() == s ) ? "red" : "white";
+                lis[i].style.color = color;
+        }
+}
+/* Until we're at the right color, keep going */
+function snarfBlat() {
+        if (state == target) return true;
+        console.log("blat", state, target);
+        fetch("/tree", {method: "POST"}).then(setState).then(snarfBlat);
+}
+fetch("/tree").then(setState);
+for (var i = 0; i < lis.length; i++) {
+        lis[i].onclick = function(){
+                target = Array.prototype.indexOf.call(this.parentNode.children, this);
+                snarfBlat();
+        };
+}
+</script>
