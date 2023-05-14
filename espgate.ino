@@ -7,7 +7,12 @@
 #include <ESP8266HTTPUpdateServer.h>
 #include <EEPROM.h>
 #include <WiFiManager.h> // https://github.com/tzapu/WiFiManager/tree/development
+#include <ArduinoOTA.h>
 
+// Disable spurious warnings
+#if __cplusplus > 199711L
+    #define register
+#endif
 #define FASTLED_INTERNAL // no other way to suppress build warnings
 #include <FastLED.h> // Just for the handy EVERY_N macros
 FASTLED_USING_NAMESPACE
@@ -17,15 +22,15 @@ FASTLED_USING_NAMESPACE
 #include "./simplehacks/constexpr_strlen.h"
 #include "./simplehacks/array_size2.h"
 
-#define NAME_PREFIX             "ESP8266-"
-#define DATA_PIN                D1
-#define MON_PIN                D5
-#define ANALOG_PIN              A0
-#define ANALOG_SAMPLES        10
+#define NAME_PREFIX       "ESP8266-"
+#define DATA_PIN          D1
+#define MON_PIN           D5
+#define ANALOG_PIN        A0
+#define ANALOG_SAMPLES    10
 #define NTP_UPDATE_THROTTLE_MILLLISECONDS (5UL * 60UL * 60UL * 1000UL) // Ping NTP server no more than every 5 minutes
 
 String WiFi_SSID(bool persistent);
-extern int utcOffsetInSeconds = -6 * 60 * 60;
+int utcOffsetInSeconds = -6 * 60 * 60;
 
 WiFiManager wifiManager;
 ESP8266WebServer webServer(80);
@@ -39,8 +44,8 @@ NTPClient timeClient(ntpUDP, "pool.ntp.org", utcOffsetInSeconds, NTP_UPDATE_THRO
 String nameString;
 uint8_t treeState = 0;
 
-int sensorValue = 0;  // value read from the pot
-float ratioFactor=5.714;  //Resistors Ratio Factor
+float sensorValue = 0;  // value read from the pot
+float ratioFactor=17.44;  //Resistors Ratio Factor
 int analog_samples = 10;
 
 void setup() {
@@ -65,7 +70,6 @@ void setup() {
   Serial.print( F("Vcc: ") ); Serial.println(ESP.getVcc());
   Serial.print( F("MAC Address: ") ); Serial.println(WiFi.macAddress());
   Serial.println();
-
 
   if (!MYFS.begin()) {
     Serial.println(F("An error occurred when attempting to mount the flash file system"));
@@ -131,13 +135,15 @@ void setup() {
   httpUpdateServer.setup(&webServer);
 
   webServer.on("/gate", HTTP_GET, []() {
-    sendInt(treeState);
+    //toggle();
+    webServer.send(200, "text/html", "<html><body><form method=POST><input type=submit value=Gate></form></body></html>");
   });
 
   webServer.on("/gate", HTTP_POST, []() {
     //String value = webServer.arg("value");
     toggle();
-    sendInt(state_incr());
+    Serial.println("Clicked");
+    webServer.send(200, "text/html", "<html><body><form method=POST><input type=submit value=Gate></form></body></html>");
   });
 
   webServer.on("/gate", HTTP_PUT, []() {
@@ -145,7 +151,8 @@ void setup() {
   });
 
   webServer.on("/voltage", HTTP_GET, []() {
-    sendFloat(sensorValue);
+    sendFloat(measureVoltage());
+    sendString("\n");
   });
 
   webServer.enableCORS(false);
@@ -158,6 +165,10 @@ void setup() {
   Serial.println("HTTP web server started");
 
   timeClient.begin();
+
+  //Serial.println("Voltage measurement factor? ");      //Prompt User for input
+  //while (Serial.available()==0){}            //Wait for user input
+  //ratioFactor = Serial.parseFloat();              //Read user input and hold it in a variable
 }
 
 void sendInt(uint8_t value)
@@ -188,24 +199,33 @@ void toggle() {
   digitalWrite(MON_PIN, HIGH);    // turn the LED off by making the voltage LOW
 }
 
+// Measure Voltage and set the global
+float measureVoltage() {
+    int rawSensor = 0;
+    for(unsigned int i=0;i<analog_samples;i++){
+      rawSensor=rawSensor+analogRead(ANALOG_PIN);         //Read analog Voltage
+      delay(5);                              //ADC stable
+    }
+    sensorValue = (float) (0.0 + rawSensor)/analog_samples;            //Find average of N values
+
+    //R1 = 1M+470k+220k
+    //R2 = 100k
+    sensorValue = (float) (sensorValue/1024.0)*ratioFactor;      //Convert Voltage in 5v factor
+    return sensorValue;
+}
+
 void loop() {
   // put your main code here, to run repeatedly:
 
   // read the analog in value
-  if(treeState > 0) {
-    sensorValue = analogRead(ANALOG_PIN);
-    for(unsigned int i=0;i<analog_samples;i++){
-      sensorValue=sensorValue+analogRead(ANALOG_PIN);         //Read analog Voltage
-      delay(5);                              //ADC stable
-    }
-    sensorValue = (float) sensorValue/10.0;            //Find average of N values
-    sensorValue = (float) (sensorValue/1024.0)*5;      //Convert Voltage in 5v factor
-    sensorValue = sensorValue*ratioFactor;          //Find original voltage by multiplying with factor
-   
+  //if(treeState <= 0) {
+  //    Serial.println("Voltage measurement factor? ");      //Prompt User for input
+  //  while (Serial.available()==0){}            //Wait for user input
+  //  ratioFactor = Serial.parseFloat();              //Read user input and hold it in a variable
     // print the readings in the Serial Monitor
-    Serial.print("sensor = ");
-    Serial.println(sensorValue);
-  }
+    // Serial.print("sensor = ");
+  //  Serial.println(measureVoltage());
+  //}
 
   wifiManager.process();
   webServer.handleClient();
