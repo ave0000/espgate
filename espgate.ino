@@ -49,8 +49,8 @@ float ratioFactor=17.44;  //Resistors Ratio Factor
 int analog_samples = 10;
 
 void setup() {
-  pinMode(DATA_PIN, OUTPUT);
-  pinMode(MON_PIN, OUTPUT);
+  pinMode(DATA_PIN, OUTPUT_OPEN_DRAIN);
+  pinMode(MON_PIN, OUTPUT_OPEN_DRAIN);
   digitalWrite(DATA_PIN, HIGH);
   digitalWrite(MON_PIN, HIGH);
   
